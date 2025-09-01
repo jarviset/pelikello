@@ -25,7 +25,7 @@
 
     .wrap{width:min(980px,94vw); padding:18px}
 
-    /* Jos DOMiin päätyy vahingossa useampi kortti, näytä vain ensimmäinen */
+    /* Tuplakello-suoja: jos DOMiin lipsahtaa useampi kortti, näytä vain ensimmäinen */
     .wrap .card:not(:first-of-type){display:none !important}
 
     .card{background:var(--panel); border:1px solid var(--panelBorder); border-radius:24px; box-shadow:0 20px 60px rgba(0,0,0,.45); padding:18px}
@@ -62,6 +62,9 @@
     .sumRow{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid var(--panelBorder)}
     .sumRow .lbl{color:var(--muted)}
     .sumRow .val{font-variant-numeric:tabular-nums; font-weight:800}
+    .sumRow .stp{font-variant-numeric:tabular-nums; font-weight:800}
+    .sumRow .stp.pos{color:var(--accent)}
+    .sumRow .stp.neg{color:var(--danger)}
 
     .hidden{display:none !important}
   </style>
@@ -137,51 +140,71 @@
     beep: document.getElementById('beep'),
   };
 
-  let perHalf = 2700;   // sääntöaika/puoliaika (s)
+  let perHalf = 2700;   // s
   let regStart = 0;     // ms
   let stpStart = 0;     // ms
 
-  let h1Stoppage = 0;   // s
-  let h2Stoppage = 0;   // s
-  let earlyOffset = 0;  // s, kuinka paljon ennen sääntöajan loppua keskeytettiin
-  let pausedAt = 0;     // s, kulunut peliaika keskeytyshetkellä  // s, kuinka paljon ennen sääntöajan loppua keskeytettiin
+  // Yhteenvetoa varten
+  let h1Stoppage = 0;   // s, voi olla negatiivinen (keskeytys)
+  let h2Stoppage = 0;   // s, voi olla negatiivinen (keskeytys)
+  let h1RegDisp = 0;    // s, näytettävä peliaika (perHalf tai pausedAt)
+  let h2RegDisp = 0;    // s
+
+  // Keskeytyshetki
+  let pausedAt = 0;     // s, kulunut peliaika keskeytyshetkellä
+  let earlyOffset = 0;  // s, kuinka paljon jäi pelaamatta
 
   function fmt2(n){ return String(n).padStart(2,'0'); }
   function fmtMS(sec){ sec = Math.max(0, Math.floor(sec)); const m = Math.floor(sec/60), s = sec%60; return `${fmt2(m)}:${fmt2(s)}`; }
   function fmtPlus(sec){ sec = Math.max(0, Math.floor(sec)); const m = Math.floor(sec/60), s = sec%60; return `+${m}:${fmt2(s)}`; }
-  function fmtMinus(sec){ sec = Math.max(0, Math.floor(sec)); const m = Math.floor(sec/60), s = sec%60; return `-${m}:${fmt2(s)}`; }
-  function playBeep(){ try{ el.beep.currentTime=0; el.beep.play(); }catch(_){}}
+  function fmtSigned(sec){ const sign = sec>=0?'+':'-'; sec = Math.abs(Math.floor(sec)); const m=Math.floor(sec/60), s=sec%60; return `${sign}${m}:${fmt2(s)}`; }
+  function playBeep(){ try{ el.beep.currentTime=0; el.beep.play(); }catch(_){}} 
 
   function setState(next){ state = next; updateUI(); }
   function lockLen(lock){ el.len.disabled = !!lock; }
 
-  function startH1(){ perHalf=parseInt(el.len.value,10); lockLen(true); regStart=Date.now(); stpStart=0; earlyOffset=0; setState(S.H1_REG); }
-  function startH2(){ regStart=Date.now(); stpStart=0; earlyOffset=0; setState(S.H2_REG); }
+  function startH1(){ perHalf=parseInt(el.len.value,10); lockLen(true); regStart=Date.now(); stpStart=0; pausedAt=0; earlyOffset=0; setState(S.H1_REG); }
+  function startH2(){ regStart=Date.now(); stpStart=0; pausedAt=0; earlyOffset=0; setState(S.H2_REG); }
 
   function halftime(){
-    // Jos oltiin lisäajassa -> kirjaa lisäaika, jos keskeytettynä -> ei lisäaikaa
-    if(state===S.H1_STP){ h1Stoppage = Math.max(0, Math.floor((Date.now()-stpStart)/1000)); }
+    if(state===S.H1_STP){ // Positiivinen lisäaika
+      h1Stoppage = Math.floor((Date.now()-stpStart)/1000);
+      h1RegDisp = perHalf;
+    } else if(state===S.H1_EARLY){ // Keskeytys
+      h1Stoppage = -Math.floor(earlyOffset);
+      h1RegDisp = Math.floor(pausedAt);
+    }
     setState(S.HT);
   }
   function fulltime(){
-    if(state===S.H2_STP){ h2Stoppage = Math.max(0, Math.floor((Date.now()-stpStart)/1000)); }
+    if(state===S.H2_STP){
+      h2Stoppage = Math.floor((Date.now()-stpStart)/1000);
+      h2RegDisp = perHalf;
+    } else if(state===S.H2_EARLY){
+      h2Stoppage = -Math.floor(earlyOffset);
+      h2RegDisp = Math.floor(pausedAt);
+    }
     setState(S.FT);
   }
-  function resetAll(){ setState(S.PRE); lockLen(false); regStart=stpStart=0; h1Stoppage=h2Stoppage=0; earlyOffset=0; el.summary.innerHTML=''; }
+  function resetAll(){
+    setState(S.PRE); lockLen(false);
+    regStart = stpStart = 0; pausedAt = earlyOffset = 0;
+    h1Stoppage = h2Stoppage = 0; h1RegDisp = h2RegDisp = 0;
+    el.summary.innerHTML='';
+  }
 
   function stopEarly(){
     const elapsed = (Date.now()-regStart)/1000; // s
-    pausedAt = Math.max(0, elapsed);
-    earlyOffset = Math.max(0, perHalf - elapsed);
+    pausedAt = Math.max(0, Math.floor(elapsed));
+    earlyOffset = Math.max(0, Math.floor(perHalf - elapsed));
     if(state===S.H1_REG) setState(S.H1_EARLY);
     if(state===S.H2_REG) setState(S.H2_EARLY);
     playBeep();
   }
   function resumePlay(){
-    // jatka siitä mihin jäätiin, säilytä tähän asti kertynyt aika
-    regStart = Date.now() - Math.floor(pausedAt*1000);
-    earlyOffset = 0; // miinusnäyttö pois
-    pausedAt = 0;
+    // jatka täsmälleen siitä mihin jäätiin
+    regStart = Date.now() - pausedAt*1000;
+    earlyOffset = 0; pausedAt = 0;
     el.stoppageClock.classList.add('hidden');
     el.stoppageClock.classList.remove('negative','positive');
     if(state===S.H1_EARLY) setState(S.H1_REG);
@@ -211,9 +234,9 @@
       el.stoppageClock.classList.remove('negative');
     }
     else if(state===S.H1_EARLY || state===S.H2_EARLY){
-      // Pysäytetty kellonäyttö – ei etene
+      // Pysäytetty: kello ei juokse, näytetään keskeytyshetken aika ja negatiivinen offset
       el.regClock.textContent = fmtMS(pausedAt);
-      el.stoppageClock.textContent = fmtMinus(earlyOffset);
+      el.stoppageClock.textContent = fmtSigned(-earlyOffset); // punainen miinus
       el.stoppageClock.classList.remove('hidden');
       el.stoppageClock.classList.add('negative');
       el.stoppageClock.classList.remove('positive');
@@ -221,12 +244,14 @@
     requestAnimationFrame(tick);
   }
 
-  function summaryRow(lbl, reg, stp, total){
-    return `<div class="sumRow"><span class="lbl">${lbl}</span><span class="val">${reg} ${stp} = ${total}</span></div>`;
+  function summaryRow(lbl, regSec, stpSec, totalSec){
+    const stpClass = stpSec>=0 ? 'pos' : 'neg';
+    const stpText = fmtSigned(stpSec);
+    return `<div class="sumRow"><span class="lbl">${lbl}</span><span class="val">${fmtMS(regSec)} <span class="stp ${stpClass}">${stpText}</span> = ${fmtMS(totalSec)}</span></div>`;
   }
 
   function updateUI(){
-    // piilota kaikki, näytä tilan mukaiset
+    // piilota kaikki
     el.btnStart.classList.add('hidden');
     el.btnHalftime.classList.add('hidden');
     el.btnStartH2.classList.add('hidden');
@@ -242,53 +267,60 @@
         el.btnStart.classList.remove('hidden');
         el.regClock.textContent='00:00'; el.stoppageClock.classList.add('hidden'); el.h1Badge.classList.add('hidden');
         break;
+
       case S.H1_REG:
         el.phase.textContent='1. puoliaika – Peliaika';
         el.statusBadge.textContent='▶︎ 1. puoliaika käynnissä';
         el.btnStopEarly.classList.remove('hidden');
         break;
+
       case S.H1_STP:
         el.phase.textContent='1. puoliaika – Lisäaika';
         el.statusBadge.textContent='⏱️ Lisäaika käynnissä (1. jakso)';
         el.btnHalftime.classList.remove('hidden');
         break;
+
       case S.H1_EARLY:
         el.phase.textContent='1. puoliaika – Keskeytetty';
         el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
         el.btnResume.classList.remove('hidden');
         el.btnHalftime.classList.remove('hidden');
-        el.btnStopEarly.classList.add('hidden');
         break;
+
       case S.HT:
         el.phase.textContent='Erätauko'; el.statusBadge.textContent='⏸️ Erätauko';
         el.btnStartH2.classList.remove('hidden');
-        const h1Row=summaryRow('1. puoliaika',fmtMS(perHalf),fmtPlus(h1Stoppage),fmtMS(perHalf+h1Stoppage));
-        el.summary.innerHTML=h1Row; el.h1Badge.textContent=`1. puoliaika: ${fmtMS(perHalf)} ${fmtPlus(h1Stoppage)} = ${fmtMS(perHalf+h1Stoppage)}`;
+        // Yhteenveto H1
+        const h1Total = (h1Stoppage>=0) ? (perHalf + h1Stoppage) : h1RegDisp;
+        el.summary.innerHTML = summaryRow('1. puoliaika', (h1RegDisp||perHalf), h1Stoppage, h1Total);
+        el.h1Badge.textContent = `1. puoliaika: ${fmtMS(h1RegDisp||perHalf)} ${fmtSigned(h1Stoppage)} = ${fmtMS(h1Total)}`;
         el.h1Badge.classList.remove('hidden');
         break;
+
       case S.H2_REG:
         el.phase.textContent='2. puoliaika – Peliaika'; el.statusBadge.textContent='▶︎ 2. puoliaika käynnissä'; el.btnStopEarly.classList.remove('hidden');
         break;
+
       case S.H2_STP:
         el.phase.textContent='2. puoliaika – Lisäaika'; el.statusBadge.textContent='⏱️ Lisäaika käynnissä (2. jakso)'; el.btnEnd.classList.remove('hidden');
         break;
+
       case S.H2_EARLY:
-        el.phase.textContent='2. puoliaika – Keskeytetty';
-        el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
-        el.btnResume.classList.remove('hidden');
-        el.btnEnd.classList.remove('hidden');
-        el.btnStopEarly.classList.add('hidden');
+        el.phase.textContent='2. puoliaika – Keskeytetty'; el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
+        el.btnResume.classList.remove('hidden'); el.btnEnd.classList.remove('hidden');
         break;
+
       case S.FT:
         el.phase.textContent='Päättynyt';
         el.statusBadge.textContent='✔️ Ottelu päättynyt';
         el.btnReset.classList.remove('hidden');
-        const h2Row=summaryRow('2. puoliaika',fmtMS(perHalf),fmtPlus(h2Stoppage),fmtMS(perHalf+h2Stoppage));
-        const total=fmtMS(perHalf*2 + h1Stoppage + h2Stoppage);
-        el.summary.innerHTML=
-          summaryRow('1. puoliaika',fmtMS(perHalf),fmtPlus(h1Stoppage),fmtMS(perHalf+h1Stoppage))+
-          h2Row+
-          `<div class="sumRow"><span class="lbl">Kokonaisaika</span><span class="val">${total}</span></div>`;
+        // Yhteenveto molemmat jaksot (värit +/− stp:n mukaan)
+        const h1TotalFT = h1Stoppage>=0 ? (perHalf + h1Stoppage) : h1RegDisp;
+        const h2TotalFT = h2Stoppage>=0 ? (perHalf + h2Stoppage) : h2RegDisp;
+        const h1Row = summaryRow('1. puoliaika', (h1RegDisp||perHalf), h1Stoppage, h1TotalFT);
+        const h2Row = summaryRow('2. puoliaika', (h2RegDisp||perHalf), h2Stoppage, h2TotalFT);
+        const total = fmtMS((h1TotalFT||0) + (h2TotalFT||0));
+        el.summary.innerHTML = h1Row + h2Row + `<div class="sumRow"><span class="lbl">Kokonaisaika</span><span class="val">${total}</span></div>`;
         break;
     }
   }
