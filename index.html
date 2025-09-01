@@ -8,11 +8,12 @@
     :root{
       --fg:#f5f7fb; --muted:#c7d0df; --accent:#7CFFA5; --accent2:#2CE88D; --danger:#ff4d4d;
       --panel:rgba(8,12,18,.58); --panelBorder:rgba(255,255,255,.14);
+      --overlay:rgba(0,0,0,.45);
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{margin:0; color:var(--fg); font:600 16px/1.4 system-ui, Segoe UI, Roboto, Helvetica, Arial; display:grid; place-items:center; min-height:100svh;}
-    /* Tausta: anna HPS-kuvan näkyä kehyksen ulkopuolella enemmän */
+    /* Tausta */
     body::before{content:""; position:fixed; inset:0; z-index:-2; background:url('hps.jpg') center/cover no-repeat; filter:saturate(1.1) contrast(1.05);}  
     body::after{content:""; position:fixed; inset:0; z-index:-1; background:
       radial-gradient(70% 70% at 50% 20%, rgba(0,0,0,.25), rgba(0,0,0,.60)),
@@ -20,14 +21,21 @@
       backdrop-filter: blur(1px);
     }
 
-    .wrap{width:min(980px,94vw); padding:18px}
+    .wrap{width:min(1100px,94vw); padding:18px; position:relative}
     /* Tuplakello-suoja */
-    .wrap .card:not(:first-of-type){display:none !important}
+    .wrap .card:not(:first-of-type).clockCard{display:none !important}
 
     .card{background:var(--panel); border:1px solid var(--panelBorder); border-radius:24px; box-shadow:0 20px 60px rgba(0,0,0,.45); padding:18px}
     .topbar{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap}
     h1{margin:0; font-size:clamp(18px,4vw,22px); letter-spacing:.02em}
     .phase{font-size:clamp(12px,3.2vw,14px); color:var(--muted); text-transform:uppercase; letter-spacing:.12em}
+
+    /* Hamburger */
+    .hamburger{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; border:1px solid var(--panelBorder); background:rgba(255,255,255,.06); cursor:pointer}
+    .hamburger span{display:block; width:22px; height:2px; background:var(--fg); position:relative}
+    .hamburger span::before,.hamburger span::after{content:""; position:absolute; left:0; width:22px; height:2px; background:var(--fg)}
+    .hamburger span::before{top:-7px}
+    .hamburger span::after{top:7px}
 
     .timer{display:grid; place-items:center; margin:6px 0 12px}
     .big{font-variant-numeric:tabular-nums; font-size:clamp(48px,16vw,120px); line-height:1; letter-spacing:.02em; text-shadow:0 0 32px rgba(44,232,141,.20), 0 2px 0 rgba(0,0,0,.5)}
@@ -59,13 +67,43 @@
     .sumRow .stp.pos{color:var(--accent)}
     .sumRow .stp.neg{color:var(--danger)}
 
+    /* Sivu: Säännöt & Tulospalvelu */
+    .rules,.results{background:var(--panel); border:1px solid var(--panelBorder); border-radius:24px; box-shadow:0 20px 60px rgba(0,0,0,.45); padding:0; overflow:hidden}
+    .rulesHeader,.resultsHeader{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--panelBorder)}
+    .rulesTitle,.resultsTitle{margin:0; font-size:clamp(16px,3.4vw,20px)}
+    .rulesBody,.resultsBody{height:min(70vh,70svh);}
+    .rulesBody iframe,.resultsBody iframe{width:100%; height:100%; border:0}
+
+    /* Drawer */
+    .overlay{position:fixed; inset:0; background:var(--overlay); backdrop-filter:blur(1px); opacity:0; pointer-events:none; transition:.2s}
+    .overlay.open{opacity:1; pointer-events:auto}
+    .drawer{position:fixed; top:0; left:0; height:100%; width:min(86vw,320px); background:rgba(9,12,18,.92); border-right:1px solid var(--panelBorder); transform:translateX(-100%); transition:.25s; box-shadow:0 20px 60px rgba(0,0,0,.55)}
+    .drawer.open{transform:none}
+    .drawer h3{margin:18px 16px 8px; font-size:14px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase}
+    .navList{list-style:none; margin:0; padding:6px}
+    .navList a{display:flex; align-items:center; gap:10px; padding:12px 14px; margin:6px; border-radius:12px; color:var(--fg); text-decoration:none; border:1px solid transparent}
+    .navList a:hover{background:rgba(255,255,255,.08); border-color:var(--panelBorder)}
+
     .hidden{display:none !important}
   </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- Drawer + overlay -->
+    <div class="overlay" id="overlay"></div>
+    <nav class="drawer" id="drawer" aria-label="Valikko">
+      <h3>Valikko</h3>
+      <ul class="navList">
+        <li><a href="#" id="navClock">🏟️ Pelikello</a></li>
+        <li><a href="#" id="navRules">📖 Säännöt</a></li>
+        <li><a href="#" id="navResults">📊 Tulospalvelu</a></li>
+      </ul>
+    </nav>
+
+    <!-- PELIKELLO -->
     <div class="card" id="app">
-      <div class="topbar">
+      <div class="topbar" style="justify-content:space-between">
+        <button class="hamburger" id="btnMenu" aria-label="Avaa valikko"><span></span></button>
         <h1>PELIKELLO</h1>
         <div class="phase" id="phase">Valmis – Ennen ottelua</div>
       </div>
@@ -104,6 +142,34 @@
 
       <div class="summaryArea" id="summary"></div>
     </div>
+
+    <!-- SÄÄNNÖT -->
+    <div class="rules hidden" id="rulesCard" aria-label="Säännöt">
+      <div class="rulesHeader">
+        <div style="display:flex; align-items:center; gap:10px">
+          <button class="hamburger" id="btnMenu2" aria-label="Avaa valikko"><span></span></button>
+          <h2 class="rulesTitle">Säännöt ja määräykset</h2>
+        </div>
+        <button class="ghost" id="backToClock">← Takaisin pelikelloon</button>
+      </div>
+      <div class="rulesBody">
+        <iframe id="rulesFrame" src="https://www.palloliitto.fi/saannot-maaraykset-ja-ohjeet" title="Palloliiton säännöt (upotus)"></iframe>
+      </div>
+    </div>
+
+    <!-- TULOSPALVELU -->
+    <div class="results hidden" id="resultsCard" aria-label="Tulospalvelu">
+      <div class="resultsHeader">
+        <div style="display:flex; align-items:center; gap:10px">
+          <button class="hamburger" id="btnMenu3" aria-label="Avaa valikko"><span></span></button>
+          <h2 class="resultsTitle">Tulospalvelu</h2>
+        </div>
+        <button class="ghost" id="backToClock2">← Takaisin pelikelloon</button>
+      </div>
+      <div class="resultsBody">
+        <iframe id="resultsFrame" src="https://tulospalvelu.palloliitto.fi/" title="Tulospalvelu (upotus)"></iframe>
+      </div>
+    </div>
   </div>
 
   <audio id="beep" preload="auto">
@@ -115,8 +181,26 @@
   const S = { PRE:'PRE', H1_REG:'H1_REG', H1_STP:'H1_STP', H1_EARLY:'H1_EARLY', HT:'HT', H2_REG:'H2_REG', H2_STP:'H2_STP', H2_EARLY:'H2_EARLY', FT:'FT' };
   let state = S.PRE;
 
-  // Hae elementit oikeaoppisesti id:llä (edellinen versio viittasi globaaleihin, mikä rikkoi napin)
+  // Elem. viittaukset
   const el = {
+    // menu
+    drawer: document.getElementById('drawer'),
+    overlay: document.getElementById('overlay'),
+    btnMenu: document.getElementById('btnMenu'),
+    btnMenu2: document.getElementById('btnMenu2'),
+    btnMenu3: document.getElementById('btnMenu3'),
+    navClock: document.getElementById('navClock'),
+    navRules: document.getElementById('navRules'),
+    navResults: document.getElementById('navResults'),
+    // views
+    app: document.getElementById('app'),
+    rulesCard: document.getElementById('rulesCard'),
+    resultsCard: document.getElementById('resultsCard'),
+    backToClock: document.getElementById('backToClock'),
+    backToClock2: document.getElementById('backToClock2'),
+    rulesFrame: document.getElementById('rulesFrame'),
+    resultsFrame: document.getElementById('resultsFrame'),
+    // clock controls
     len: document.getElementById('len'),
     phase: document.getElementById('phase'),
     regClock: document.getElementById('regClock'),
@@ -134,6 +218,35 @@
     beep: document.getElementById('beep'),
   };
 
+  // Menu helpers
+  function openMenu(){ el.drawer.classList.add('open'); el.overlay.classList.add('open'); }
+  function closeMenu(){ el.drawer.classList.remove('open'); el.overlay.classList.remove('open'); }
+
+  el.btnMenu.addEventListener('click', openMenu);
+  el.btnMenu2.addEventListener('click', openMenu);
+  el.btnMenu3.addEventListener('click', openMenu);
+  el.overlay.addEventListener('click', closeMenu);
+  el.navClock.addEventListener('click', (e)=>{ e.preventDefault(); closeMenu(); showView('clock'); });
+  el.navRules.addEventListener('click', (e)=>{ e.preventDefault(); closeMenu(); showView('rules'); });
+  el.navResults.addEventListener('click', (e)=>{ e.preventDefault(); closeMenu(); showView('results'); });
+
+  // Views
+  function showView(view){
+    el.app.classList.add('hidden');
+    el.rulesCard.classList.add('hidden');
+    el.resultsCard.classList.add('hidden');
+    if(view==='rules'){
+      el.rulesCard.classList.remove('hidden');
+    } else if(view==='results'){
+      el.resultsCard.classList.remove('hidden');
+    } else {
+      el.app.classList.remove('hidden');
+    }
+  }
+  el.backToClock.addEventListener('click', ()=> showView('clock'));
+  el.backToClock2.addEventListener('click', ()=> showView('clock'));
+
+  // --- Kellon logiikka ---
   let perHalf = 2700;   // s
   let regStart = 0;     // ms
   let stpStart = 0;     // ms
@@ -239,9 +352,9 @@
   }
 
   function summaryRow(lbl, regSec, stpSec, totalSec){
-    const stpClass = stpSec>=0 ? 'pos' : 'neg';
+    const stpClass = stpSec>=0 ? 'stp pos' : 'stp neg';
     const stpText = fmtSigned(stpSec);
-    return `<div class="sumRow"><span class="lbl">${lbl}</span><span class="val">${fmtMS(regSec)} <span class="stp ${stpClass}">${stpText}</span> = ${fmtMS(totalSec)}</span></div>`;
+    return `<div class="sumRow"><span class="lbl">${lbl}</span><span class="val">${fmtMS(regSec)} <span class="${stpClass}">${stpText}</span> = ${fmtMS(totalSec)}</span></div>`;
   }
 
   function updateUI(){
@@ -311,7 +424,7 @@
     }
   }
 
-  // Handlers
+  // Handlers – kellon näkymä
   el.btnStart.addEventListener('click', startH1);
   el.btnStartH2.addEventListener('click', startH2);
   el.btnHalftime.addEventListener('click', ()=>{ if(state===S.H1_STP || state===S.H1_EARLY) halftime(); });
@@ -322,6 +435,7 @@
 
   el.len.addEventListener('change', ()=>{ if(state===S.PRE){ perHalf=parseInt(el.len.value,10); el.regClock.textContent='00:00'; el.stoppageClock.classList.add('hidden'); }});
 
+  // Loop
   requestAnimationFrame(function raf(){ tick(); });
   updateUI();
 })();
