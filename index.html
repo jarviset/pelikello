@@ -11,11 +11,8 @@
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0; color:var(--fg); font:600 16px/1.4 system-ui, Segoe UI, Roboto, Helvetica, Arial;
-      display:grid; place-items:center; min-height:100svh;
-    }
-    /* Tausta: näytä HPS-kuva selkeämmin kehyksen ulkopuolella */
+    body{margin:0; color:var(--fg); font:600 16px/1.4 system-ui, Segoe UI, Roboto, Helvetica, Arial; display:grid; place-items:center; min-height:100svh;}
+    /* Tausta: anna HPS-kuvan näkyä kehyksen ulkopuolella enemmän */
     body::before{content:""; position:fixed; inset:0; z-index:-2; background:url('hps.jpg') center/cover no-repeat; filter:saturate(1.1) contrast(1.05);}  
     body::after{content:""; position:fixed; inset:0; z-index:-1; background:
       radial-gradient(70% 70% at 50% 20%, rgba(0,0,0,.25), rgba(0,0,0,.60)),
@@ -24,12 +21,10 @@
     }
 
     .wrap{width:min(980px,94vw); padding:18px}
-
-    /* Tuplakello-suoja: jos DOMiin lipsahtaa useampi kortti, näytä vain ensimmäinen */
+    /* Tuplakello-suoja */
     .wrap .card:not(:first-of-type){display:none !important}
 
     .card{background:var(--panel); border:1px solid var(--panelBorder); border-radius:24px; box-shadow:0 20px 60px rgba(0,0,0,.45); padding:18px}
-
     .topbar{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap}
     h1{margin:0; font-size:clamp(18px,4vw,22px); letter-spacing:.02em}
     .phase{font-size:clamp(12px,3.2vw,14px); color:var(--muted); text-transform:uppercase; letter-spacing:.12em}
@@ -41,7 +36,6 @@
     .extra.negative{color:var(--danger)}
 
     .hud{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin:10px 0 14px}
-
     .pill{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--panelBorder); border-radius:999px; background:rgba(255,255,255,.04)}
     .pill label{font-size:14px; color:var(--muted)}
     select{appearance:none; background:rgba(255,255,255,.9); border:1px solid var(--panelBorder); color:#000; border-radius:12px; padding:10px 12px; font-weight:700}
@@ -55,7 +49,6 @@
 
     .miniNote{margin-top:6px; text-align:center; color:var(--muted); font-size:13px}
     .badge{display:inline-flex; gap:8px; align-items:center; padding:8px 12px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid var(--panelBorder); color:var(--muted); font-size:13px}
-
     .split{height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent); margin:14px 0}
 
     .summaryArea{display:grid; gap:10px; margin-top:8px}
@@ -99,11 +92,11 @@
 
       <div class="controls" id="controls">
         <button class="primary" id="btnStart">Käynnistä ottelu</button>
-        <button class="ghost hidden" id="btnHalftime">Erätauko</button>
-        <button class="primary hidden" id="btnStartH2">Käynnistä 2. puoliaika</button>
+        <button class="ghost hidden" id="btnHalftime">Puoliaika</button>
+        <button class="primary hidden" id="btnStartH2">Käynnistä 2. jakso</button>
         <button class="danger hidden" id="btnEnd">Lopeta</button>
         <button class="ghost hidden" id="btnReset">Nollaa</button>
-        <button class="danger hidden" id="btnStopEarly">Keskeytä erä</button>
+        <button class="danger hidden" id="btnStopEarly">Keskeytä jakso</button>
         <button class="primary hidden" id="btnResume">Jatka peliä</button>
       </div>
 
@@ -122,6 +115,7 @@
   const S = { PRE:'PRE', H1_REG:'H1_REG', H1_STP:'H1_STP', H1_EARLY:'H1_EARLY', HT:'HT', H2_REG:'H2_REG', H2_STP:'H2_STP', H2_EARLY:'H2_EARLY', FT:'FT' };
   let state = S.PRE;
 
+  // Hae elementit oikeaoppisesti id:llä (edellinen versio viittasi globaaleihin, mikä rikkoi napin)
   const el = {
     len: document.getElementById('len'),
     phase: document.getElementById('phase'),
@@ -267,49 +261,41 @@
         el.btnStart.classList.remove('hidden');
         el.regClock.textContent='00:00'; el.stoppageClock.classList.add('hidden'); el.h1Badge.classList.add('hidden');
         break;
-
       case S.H1_REG:
-        el.phase.textContent='1. puoliaika – Peliaika';
-        el.statusBadge.textContent='▶︎ 1. puoliaika käynnissä';
+        el.phase.textContent='1. jakso – Peliaika';
+        el.statusBadge.textContent='▶︎ 1. jakso käynnissä';
         el.btnStopEarly.classList.remove('hidden');
         break;
-
       case S.H1_STP:
-        el.phase.textContent='1. puoliaika – Lisäaika';
+        el.phase.textContent='1. jakso – Lisäaika';
         el.statusBadge.textContent='⏱️ Lisäaika käynnissä (1. jakso)';
         el.btnHalftime.classList.remove('hidden');
         break;
-
       case S.H1_EARLY:
-        el.phase.textContent='1. puoliaika – Keskeytetty';
+        el.phase.textContent='1. jakso – Keskeytetty';
         el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
         el.btnResume.classList.remove('hidden');
         el.btnHalftime.classList.remove('hidden');
         break;
-
       case S.HT:
-        el.phase.textContent='Erätauko'; el.statusBadge.textContent='⏸️ Erätauko';
+        el.phase.textContent='Puoliaika'; el.statusBadge.textContent='⏸️ Puoliaika';
         el.btnStartH2.classList.remove('hidden');
         // Yhteenveto H1
         const h1Total = (h1Stoppage>=0) ? (perHalf + h1Stoppage) : h1RegDisp;
-        el.summary.innerHTML = summaryRow('1. puoliaika', (h1RegDisp||perHalf), h1Stoppage, h1Total);
-        el.h1Badge.textContent = `1. puoliaika: ${fmtMS(h1RegDisp||perHalf)} ${fmtSigned(h1Stoppage)} = ${fmtMS(h1Total)}`;
+        el.summary.innerHTML = summaryRow('1. jakso', (h1RegDisp||perHalf), h1Stoppage, h1Total);
+        el.h1Badge.textContent = `1. jakso: ${fmtMS(h1RegDisp||perHalf)} ${fmtSigned(h1Stoppage)} = ${fmtMS(h1Total)}`;
         el.h1Badge.classList.remove('hidden');
         break;
-
       case S.H2_REG:
-        el.phase.textContent='2. puoliaika – Peliaika'; el.statusBadge.textContent='▶︎ 2. puoliaika käynnissä'; el.btnStopEarly.classList.remove('hidden');
+        el.phase.textContent='2. jakso – Peliaika'; el.statusBadge.textContent='▶︎ 2. jakso käynnissä'; el.btnStopEarly.classList.remove('hidden');
         break;
-
       case S.H2_STP:
-        el.phase.textContent='2. puoliaika – Lisäaika'; el.statusBadge.textContent='⏱️ Lisäaika käynnissä (2. jakso)'; el.btnEnd.classList.remove('hidden');
+        el.phase.textContent='2. jakso – Lisäaika'; el.statusBadge.textContent='⏱️ Lisäaika käynnissä (2. jakso)'; el.btnEnd.classList.remove('hidden');
         break;
-
       case S.H2_EARLY:
-        el.phase.textContent='2. puoliaika – Keskeytetty'; el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
+        el.phase.textContent='2. jakso – Keskeytetty'; el.statusBadge.textContent='⛔ Keskeytetty ennen täyttä aikaa';
         el.btnResume.classList.remove('hidden'); el.btnEnd.classList.remove('hidden');
         break;
-
       case S.FT:
         el.phase.textContent='Päättynyt';
         el.statusBadge.textContent='✔️ Ottelu päättynyt';
@@ -317,8 +303,8 @@
         // Yhteenveto molemmat jaksot (värit +/− stp:n mukaan)
         const h1TotalFT = h1Stoppage>=0 ? (perHalf + h1Stoppage) : h1RegDisp;
         const h2TotalFT = h2Stoppage>=0 ? (perHalf + h2Stoppage) : h2RegDisp;
-        const h1Row = summaryRow('1. puoliaika', (h1RegDisp||perHalf), h1Stoppage, h1TotalFT);
-        const h2Row = summaryRow('2. puoliaika', (h2RegDisp||perHalf), h2Stoppage, h2TotalFT);
+        const h1Row = summaryRow('1. jakso', (h1RegDisp||perHalf), h1Stoppage, h1TotalFT);
+        const h2Row = summaryRow('2. jakso', (h2RegDisp||perHalf), h2Stoppage, h2TotalFT);
         const total = fmtMS((h1TotalFT||0) + (h2TotalFT||0));
         el.summary.innerHTML = h1Row + h2Row + `<div class="sumRow"><span class="lbl">Kokonaisaika</span><span class="val">${total}</span></div>`;
         break;
